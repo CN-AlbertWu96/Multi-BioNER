@@ -105,3 +105,16 @@ venv.bak/
 
 # IDEA
 .idea/
+
+# annotate
+annotate/
+
+# data
+data_bioner_5/
+test.tsv
+
+# checkpoint
+checkpoint/
+
+# scripts
+download.py
