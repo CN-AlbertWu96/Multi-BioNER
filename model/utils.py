@@ -151,7 +151,7 @@ def shrink_features(feature_map, features, thresholds):
     feature_count = {k: 0 for (k, v) in iter(feature_map.items())}
     for feature_list in features:
         for feature in feature_list:
-            feature_count[feature] += 1
+            feature_count[feature] = feature_count.get(feature, 0) + 1
     shrinked_feature_count = [k for (k, v) in iter(feature_count.items()) if v >= thresholds]
     feature_map = {shrinked_feature_count[ind]: (ind + 1) for ind in range(0, len(shrinked_feature_count))}
 
@@ -807,3 +807,23 @@ def init_lstm(input_lstm):
             weight = eval('input_lstm.bias_hh_l'+str(ind))
             weight.data.zero_()
             weight.data[input_lstm.hidden_size: 2 * input_lstm.hidden_size] = 1
+
+def get_sinusoid_encoding_table(n_position, d_hid, padding_idx=None):
+    ''' Sinusoid position encoding table '''
+
+    def cal_angle(position, hid_idx):
+        return position / np.power(10000, 2 * (hid_idx // 2) / d_hid)
+
+    def get_posi_angle_vec(position):
+        return [cal_angle(position, hid_j) for hid_j in range(d_hid)]
+
+    sinusoid_table = np.array([get_posi_angle_vec(pos_i) for pos_i in range(n_position)])
+
+    sinusoid_table[:, 0::2] = np.sin(sinusoid_table[:, 0::2])  # dim 2i
+    sinusoid_table[:, 1::2] = np.cos(sinusoid_table[:, 1::2])  # dim 2i+1
+
+    if padding_idx is not None:
+        # zero vector for padding dimension
+        sinusoid_table[padding_idx] = 0.
+
+    return torch.FloatTensor(sinusoid_table)

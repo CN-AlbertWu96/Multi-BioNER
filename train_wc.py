@@ -140,12 +140,15 @@ if __name__ == "__main__":
 
         train_features_tot += train_features0
 
-    shrink_char_count = [k for (k, v) in iter(char_count.items()) if v >= args.mini_count]
-    char_map = {shrink_char_count[ind]: ind for ind in range(0, len(shrink_char_count))}
+    if args.load_check_point:
+        char_map = c_map
+    else:
+        shrink_char_count = [k for (k, v) in iter(char_count.items()) if v >= args.mini_count]
+        char_map = {shrink_char_count[ind]: ind for ind in range(0, len(shrink_char_count))}
 
-    char_map['<u>'] = len(char_map)  # unk for char
-    char_map[' '] = len(char_map)  # concat for char
-    char_map['\n'] = len(char_map)  # eof for char
+        char_map['<u>'] = len(char_map)  # unk for char
+        char_map[' '] = len(char_map)  # concat for char
+        char_map['\n'] = len(char_map)  # eof for char
 
     f_set = {v for v in f_map}
     dt_f_set = f_set
