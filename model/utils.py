@@ -26,7 +26,7 @@ zip = getattr(itertools, 'izip', zip)
 def to_scalar(var):
     """change the first element of a tensor to scalar
     """
-    return var.view(-1).data.tolist()[0]
+    return var.reshape(-1).data.tolist()[0]
 
 
 def argmax(vec):
@@ -47,9 +47,9 @@ def log_sum_exp(vec, m_size):
         batch_size, hidden_dim
     """
     _, idx = torch.max(vec, 1)  # B * 1 * M
-    max_score = torch.gather(vec, 1, idx.view(-1, 1, m_size)).view(-1, 1, m_size)  # B * M
+    max_score = torch.gather(vec, 1, idx.reshape(-1, 1, m_size)).reshape(-1, 1, m_size)  # B * M
       
-    return max_score.view(-1, m_size) + torch.log(torch.sum(torch.exp(vec - max_score.expand_as(vec)), 1)).view(-1, m_size)  # B * M
+    return max_score.reshape(-1, m_size) + torch.log(torch.sum(torch.exp(vec - max_score.expand_as(vec)), 1)).reshape(-1, m_size)  # B * M
 
 
 def switch(vec1, vec2, mask):
@@ -63,9 +63,9 @@ def switch(vec1, vec2, mask):
     return:
         vec (*)
     """
-    catvec = torch.cat([vec1.view(-1, 1), vec2.view(-1, 1)], dim=1)
-    switched_vec = torch.gather(catvec, 1, mask.long().view(-1, 1))
-    return switched_vec.view(-1)
+    catvec = torch.cat([vec1.reshape(-1, 1), vec2.reshape(-1, 1)], dim=1)
+    switched_vec = torch.gather(catvec, 1, mask.long().reshape(-1, 1))
+    return switched_vec.reshape(-1)
 
 
 def encode2char_safe(input_lines, char_dict):
@@ -776,14 +776,14 @@ def init_embedding(input_embedding):
     Initialize embedding
     """
     bias = np.sqrt(3.0 / input_embedding.size(1))
-    nn.init.uniform(input_embedding, -bias, bias)
+    nn.init.uniform_(input_embedding, -bias, bias)
 
 def init_linear(input_linear):
     """
     Initialize linear transformation
     """
     bias = np.sqrt(6.0 / (input_linear.weight.size(0) + input_linear.weight.size(1)))
-    nn.init.uniform(input_linear.weight, -bias, bias)
+    nn.init.uniform_(input_linear.weight, -bias, bias)
     if input_linear.bias is not None:
         input_linear.bias.data.zero_()
 
@@ -794,10 +794,10 @@ def init_lstm(input_lstm):
     for ind in range(0, input_lstm.num_layers):
         weight = eval('input_lstm.weight_ih_l'+str(ind))
         bias = np.sqrt(6.0 / (weight.size(0)/4 + weight.size(1)))
-        nn.init.uniform(weight, -bias, bias)
+        nn.init.uniform_(weight, -bias, bias)
         weight = eval('input_lstm.weight_hh_l'+str(ind))
         bias = np.sqrt(6.0 / (weight.size(0)/4 + weight.size(1)))
-        nn.init.uniform(weight, -bias, bias)
+        nn.init.uniform_(weight, -bias, bias)
     
     if input_lstm.bias:
         for ind in range(0, input_lstm.num_layers):
