@@ -133,7 +133,7 @@ def generate_corpus_char(lines, feature_map, label_map, char_count, c_thresholds
         w_threshold: threshold for shrinking word-dictionary
         
     """
-    features, labels, feature_map, label_map = generate_corpus(lines, feature_map, label_map, if_shrink_feature=if_shrink_w_feature, thresholds=w_thresholds)
+    features, labels, feature_map, label_map, max_length = generate_corpus(lines, feature_map, label_map, if_shrink_feature=if_shrink_w_feature, thresholds=w_thresholds)
     for feature in features:
         for word in feature:
             for tup in word:
@@ -142,7 +142,7 @@ def generate_corpus_char(lines, feature_map, label_map, char_count, c_thresholds
                 else:
                     char_count[tup] += 1
 
-    return features, labels, feature_map, label_map, char_count
+    return features, labels, feature_map, label_map, char_count, max_length
 
 def shrink_features(feature_map, features, thresholds):
     """
@@ -151,7 +151,7 @@ def shrink_features(feature_map, features, thresholds):
     feature_count = {k: 0 for (k, v) in iter(feature_map.items())}
     for feature_list in features:
         for feature in feature_list:
-            feature_count[feature] = feature_count.get(feature, 0) + 1
+            feature_count[feature] += 1
     shrinked_feature_count = [k for (k, v) in iter(feature_count.items()) if v >= thresholds]
     feature_map = {shrinked_feature_count[ind]: (ind + 1) for ind in range(0, len(shrinked_feature_count))}
 
@@ -176,21 +176,29 @@ def generate_corpus(lines, feature_map, label_map, if_shrink_feature=False, thre
     labels = list()
     tmp_fl = list()
     tmp_ll = list()
+    max_length = 0
+    length = 0
+
     for line in lines:
         if not (line.isspace() or (len(line) > 10 and line[0:10] == '-DOCSTART-')):
             line = line.rstrip('\n').split()
             tmp_fl.append(line[0])
+            length += 1
             if line[0] not in feature_map:
                 feature_map[line[0]] = len(feature_map) + 1 #0 is for unk
             tmp_ll.append(line[-1])
             if line[-1] not in label_map:
                 label_map[line[-1]] = len(label_map)
         elif len(tmp_fl) > 0:
+            max_length = max(max_length, length)
+            length = 0
             features.append(tmp_fl)
             labels.append(tmp_ll)
             tmp_fl = list()
             tmp_ll = list()
     if len(tmp_fl) > 0:
+        max_length = max(max_length, length)
+        length = 0
         features.append(tmp_fl)
         labels.append(tmp_ll)
     if '<start>' not in label_map:
@@ -206,7 +214,7 @@ def generate_corpus(lines, feature_map, label_map, if_shrink_feature=False, thre
         if '<eof>' not in feature_map:
             feature_map['<eof>'] = len(feature_map)
 
-    return features, labels, feature_map, label_map
+    return features, labels, feature_map, label_map, max_length
 
 
 def read_corpus(lines):
@@ -217,21 +225,29 @@ def read_corpus(lines):
     labels = list()
     tmp_fl = list()
     tmp_ll = list()
+    max_length = 0
+    length = 0
+    
     for line in lines:
         if not (line.isspace() or (len(line) > 10 and line[0:10] == '-DOCSTART-')):
             line = line.rstrip('\n').split()
             tmp_fl.append(line[0])
             tmp_ll.append(line[-1])
+            length += 1
         elif len(tmp_fl) > 0:
+            max_length = max(length, max_length)
+            length = 0
             features.append(tmp_fl)
             labels.append(tmp_ll)
             tmp_fl = list()
             tmp_ll = list()
     if len(tmp_fl) > 0:
+        max_length = max(length, max_length)
+        length = 0
         features.append(tmp_fl)
         labels.append(tmp_ll)
 
-    return features, labels
+    return features, labels, max_length
 
 def read_features(lines): #NEW
     """
@@ -509,7 +525,7 @@ def construct_bucket_vb_wc(word_features, forw_features, fea_len, input_labels, 
     forw_corpus = [pad_char_feature] + list(reduce(lambda x, y: x + [pad_char_feature] + y, forw_features)) + [pad_char_feature]
     back_corpus = forw_corpus[::-1]
     # two way construct, first build the bucket, then calculate padding length, then do the padding
-    buckets = [[[], [], [], [], [], [], [], []] for ind in range(len(thresholds))]
+    buckets = [[[], [], [], [], [], [], [], [], []] for ind in range(len(thresholds))]
     # forw, forw_ind, back, back_in, label, mask
     buckets_len = [0 for ind in range(len(thresholds))]
 
@@ -545,10 +561,12 @@ def construct_bucket_vb_wc(word_features, forw_features, fea_len, input_labels, 
         buckets[idx][5].append([i_l[ind] * label_size + i_l[ind + 1] for ind in range(0, cur_len)] + [i_l[cur_len] * label_size + pad_label] + [pad_label * label_size + pad_label] * (thresholds[idx] - cur_len_1))  # has additional start, label
         buckets[idx][6].append([1] * cur_len_1 + [0] * (thresholds[idx] - cur_len_1))  # has additional start, mask
         buckets[idx][7].append([len(f_f) + thresholds[idx] - len(f_l), cur_len_1])
+        buckets[idx][8].append([x for x in range(len(padded_feature_len))])
     bucket_dataset = [CRFDataset_WC(torch.LongTensor(bucket[0]), torch.LongTensor(bucket[1]),
                                    torch.LongTensor(bucket[2]), torch.LongTensor(bucket[3]),
                                    torch.LongTensor(bucket[4]), torch.LongTensor(bucket[5]), 
-                                   torch.ByteTensor(bucket[6]), torch.LongTensor(bucket[7])) for bucket in buckets]
+                                   torch.ByteTensor(bucket[6]), torch.LongTensor(bucket[7]),
+                                   torch.LongTensor(bucket[8])) for bucket in buckets]
     return bucket_dataset, forw_corpus, back_corpus
 
 
@@ -827,3 +845,19 @@ def get_sinusoid_encoding_table(n_position, d_hid, padding_idx=None):
         sinusoid_table[padding_idx] = 0.
 
     return torch.FloatTensor(sinusoid_table)
+
+
+def get_attn_key_pad_mask(seq_k, seq_q, word_dict):
+    ''' For masking out the padding part of key sequence. '''
+
+    # Expand to fit the shape of key query attention matrix.
+    len_q = seq_q.size(1)
+    padding_mask = seq_k.eq(word_dict['<eof>'])
+    padding_mask = padding_mask.unsqueeze(1).expand(-1, len_q, -1)  # b x lq x lk
+
+    return padding_mask
+
+
+def get_non_pad_mask(seq, word_dict):
+    assert seq.dim() == 2
+    return seq.ne(word_dict['<eof>']).type(torch.float).unsqueeze(-1)

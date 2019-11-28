@@ -64,6 +64,7 @@ if __name__ == "__main__":
     parser.add_argument('--least_iters', type=int, default=50, help='at least train how many epochs before stop')
     parser.add_argument('--shrink_embedding', action='store_true', help='shrink the embedding dictionary to corpus (open this if pre-trained embedding dictionary is too large, but disable this may yield better results on external corpus)')
     parser.add_argument('--output_annotation', action='store_true', help='output annotation results or not')
+    parser.add_argument('--attention', type=bool, default=True, help='apply attention')
     args = parser.parse_args()
 
     if args.gpu >= 0:
@@ -103,17 +104,22 @@ if __name__ == "__main__":
     train_labels = []
     dev_labels = []
     test_labels = []
+    train_max_length = []
+    dev_max_length = []
+    test_max_length = []
     train_features_tot = []
     test_word = []
 
     for i in range(file_num):
-        dev_features0, dev_labels0 = utils.read_corpus(dev_lines[i])
-        test_features0, test_labels0 = utils.read_corpus(test_lines[i])
+        dev_features0, dev_labels0, dev_max_length0 = utils.read_corpus(dev_lines[i])
+        test_features0, test_labels0, test_max_length0 = utils.read_corpus(test_lines[i])
 
         dev_features.append(dev_features0)
         test_features.append(test_features0)
         dev_labels.append(dev_labels0)
         test_labels.append(test_labels0)
+        dev_max_length.append(dev_max_length0)
+        test_max_length.append(test_max_length0)
 
         if args.output_annotation: #NEW
             test_word0 = utils.read_features(test_lines[i])
@@ -128,15 +134,16 @@ if __name__ == "__main__":
                 l_map = checkpoint_file['l_map']
                 c_map = checkpoint_file['c_map']
                 in_doc_words = checkpoint_file['in_doc_words']
-                train_features, train_labels = utils.read_corpus(lines[i])
+                train_features0, train_labels0, train_max_length0 = utils.read_corpus(lines[i])
             else:
                 print("no checkpoint found at: '{}'".format(args.load_check_point))
         else:
             print('constructing coding table')
-            train_features0, train_labels0, f_map, l_map, char_count = utils.generate_corpus_char(lines[i], f_map, l_map, char_count, c_thresholds=args.mini_count, if_shrink_w_feature=False)
+            train_features0, train_labels0, f_map, l_map, char_count, train_max_length0 = utils.generate_corpus_char(lines[i], f_map, l_map, char_count, c_thresholds=args.mini_count, if_shrink_w_feature=False)
         
         train_features.append(train_features0)
         train_labels.append(train_labels0)
+        train_max_length.append(train_max_length0)
 
         train_features_tot += train_features0
 
@@ -155,6 +162,8 @@ if __name__ == "__main__":
     f_map = utils.shrink_features(f_map, train_features_tot, args.mini_count)
 
     l_set = set()
+
+    len_max_seq = max(dev_max_length + test_max_length + train_max_length)
 
     for i in range(file_num):
                    
@@ -186,10 +195,27 @@ if __name__ == "__main__":
         dataset_loader.append([torch.utils.data.DataLoader(tup, args.batch_size, shuffle=True, drop_last=False) for tup in dataset])
         dev_dataset_loader.append([torch.utils.data.DataLoader(tup, 50, shuffle=False, drop_last=False) for tup in dev_dataset])
         test_dataset_loader.append([torch.utils.data.DataLoader(tup, 50, shuffle=False, drop_last=False) for tup in test_dataset])
-
+    
     # build model
     print('building model')
-    ner_model = LM_LSTM_CRF(len(l_map), len(char_map), args.char_dim, args.char_hidden, args.char_layers, args.word_dim, args.word_hidden, args.word_layers, len(f_map), args.drop_out, file_num, large_CRF=args.small_crf, if_highway=args.high_way, in_doc_words=in_doc_words, highway_layers = args.highway_layers)
+    ner_model = LM_LSTM_CRF(
+        tagset_size = len(l_map), 
+        char_size = len(char_map), 
+        char_dim = args.char_dim, 
+        char_hidden_dim = args.char_hidden, 
+        char_rnn_layers = args.char_layers, 
+        embedding_dim = args.word_dim, 
+        word_hidden_dim = args.word_hidden, 
+        word_rnn_layers = args.word_layers, 
+        vocab_size = len(f_map), 
+        dropout_ratio = args.drop_out, 
+        file_num = file_num, 
+        len_max_seq = len_max_seq, 
+        large_CRF=args.small_crf, 
+        if_highway=args.high_way, 
+        in_doc_words=in_doc_words, 
+        highway_layers = args.highway_layers,
+        word_level_attention = args.attention)
 
     if args.load_check_point:
         ner_model.load_state_dict(checkpoint_file['state_dict'])
@@ -257,12 +283,12 @@ if __name__ == "__main__":
             file_no = random.randint(0, file_num-1)            
             cur_dataset = dataset_loader[file_no]
             
-            for f_f, f_p, b_f, b_p, w_f, tg_v, mask_v, len_v in itertools.chain.from_iterable(cur_dataset):
+            for f_f, f_p, b_f, b_p, w_f, tg_v, mask_v, len_v, w_p in itertools.chain.from_iterable(cur_dataset):
 
-                f_f, f_p, b_f, b_p, w_f, tg_v, mask_v = packer.repack_vb(f_f, f_p, b_f, b_p, w_f, tg_v, mask_v, len_v)
+                f_f, f_p, b_f, b_p, w_f, tg_v, mask_v, w_p = packer.repack_vb(f_f, f_p, b_f, b_p, w_f, tg_v, mask_v, len_v, w_p)
 
                 ner_model.zero_grad()
-                scores = ner_model(f_f, f_p, b_f, b_p, w_f, file_no)
+                scores = ner_model(f_f, f_p, b_f, b_p, w_f, w_p, f_map, file_no)
                 loss = crit_ner(scores, tg_v, mask_v)
 
                 epoch_loss += utils.to_scalar(loss)
@@ -286,7 +312,7 @@ if __name__ == "__main__":
 
         # eval & save check_point
         if 'f' in args.eva_matrix:
-            dev_f1, dev_pre, dev_rec, dev_acc = evaluator.calc_score(ner_model, dev_dataset_loader[file_no], file_no)
+            dev_f1, dev_pre, dev_rec, dev_acc = evaluator.calc_score(ner_model, dev_dataset_loader[file_no], f_map, file_no)
 
             if dev_f1 > best_f1[file_no]:
                 patience_count = 0
@@ -294,7 +320,7 @@ if __name__ == "__main__":
                 best_pre[file_no] = dev_pre
                 best_rec[file_no] = dev_rec
 
-                test_f1, test_pre, test_rec, test_acc = evaluator.calc_score(ner_model, test_dataset_loader[file_no], file_no)
+                test_f1, test_pre, test_rec, test_acc = evaluator.calc_score(ner_model, test_dataset_loader[file_no], f_map, file_no)
 
                 track_list.append(
                     {'loss': epoch_loss, 'dev_f1': dev_f1, 'dev_acc': dev_acc, 'test_f1': test_f1,

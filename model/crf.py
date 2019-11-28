@@ -158,7 +158,7 @@ class CRFRepack_WC:
         self.tagset_size = tagset_size
         self.if_cuda = if_cuda
 
-    def repack_vb(self, f_f, f_p, b_f, b_p, w_f, target, mask, len_b):
+    def repack_vb(self, f_f, f_p, b_f, b_p, w_f, target, mask, len_b, w_p):
         """packer for viterbi loss
 
         args: 
@@ -170,8 +170,12 @@ class CRFRepack_WC:
             target (Seq_len, Batch_size) : output target
             mask (Word_Seq_len, Batch_size) : padding mask
             len_b (Batch_size, 2) : length of instances in one batch
+            w_p (Word_Seq_len, Batch_size) : forward_word input position
         return:
-            f_f (Char_Reduced_Seq_len, Batch_size), f_p (Word_Reduced_Seq_len, Batch_size), b_f (Char_Reduced_Seq_len, Batch_size), b_p (Word_Reduced_Seq_len, Batch_size), w_f (size Word_Seq_Len, Batch_size), target (Reduced_Seq_len, Batch_size), mask  (Word_Reduced_Seq_len, Batch_size)
+            f_f (Char_Reduced_Seq_len, Batch_size), f_p (Word_Reduced_Seq_len, Batch_size), 
+            b_f (Char_Reduced_Seq_len, Batch_size), b_p (Word_Reduced_Seq_len, Batch_size), 
+            w_f (size Word_Seq_Len, Batch_size), target (Reduced_Seq_len, Batch_size), 
+            mask (Word_Reduced_Seq_len, Batch_size), w_p (Word_Seq_len, Batch_size)
 
         """
         mlen, _ = len_b.max(0)
@@ -185,6 +189,7 @@ class CRFRepack_WC:
             w_f = autograd.Variable(w_f[:, 0:mlen[1]].transpose(0, 1)).cuda()
             tg_v = autograd.Variable(target[:, 0:mlen[1]].transpose(0, 1)).unsqueeze(2).cuda()
             mask_v = autograd.Variable(mask[:, 0:mlen[1]].transpose(0, 1)).cuda()
+            w_p = autograd.Variable(w_p[:, 0:mlen[1]].transpose(0, 1)).cuda()
         else:
             f_f = autograd.Variable(f_f[:, 0:mlen[0]].transpose(0, 1))
             f_p = autograd.Variable(f_p[:, 0:mlen[1]].transpose(0, 1))
@@ -193,7 +198,8 @@ class CRFRepack_WC:
             w_f = autograd.Variable(w_f[:, 0:mlen[1]].transpose(0, 1))
             tg_v = autograd.Variable(target[:, 0:mlen[1]].transpose(0, 1)).unsqueeze(2)
             mask_v = autograd.Variable(mask[:, 0:mlen[1]].transpose(0, 1))
-        return f_f, f_p, b_f, b_p, w_f, tg_v, mask_v
+            w_p = autograd.Variable(w_p[:, 0:mlen[1]].transpose(0, 1))
+        return f_f, f_p, b_f, b_p, w_f, tg_v, mask_v, w_p
 
     def convert_for_eval(self, target):
         """convert for eval

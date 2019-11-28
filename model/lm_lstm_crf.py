@@ -13,6 +13,7 @@ import numpy as np
 import model.crf as crf
 import model.utils as utils
 import model.highway as highway
+import model.submodel as submodel
 
 class LM_LSTM_CRF(nn.Module):
     """LM_LSTM_CRF model
@@ -34,7 +35,14 @@ class LM_LSTM_CRF(nn.Module):
         highway_layers: number of highway layers
     """
     
-    def __init__(self, tagset_size, char_size, char_dim, char_hidden_dim, char_rnn_layers, embedding_dim, word_hidden_dim, word_rnn_layers, vocab_size, dropout_ratio, file_num, large_CRF=True, if_highway = False, in_doc_words = 2, highway_layers = 1):
+    def __init__(
+        self, 
+        tagset_size, char_size, char_dim, char_hidden_dim, 
+        char_rnn_layers, embedding_dim, word_hidden_dim, 
+        word_rnn_layers, vocab_size, dropout_ratio, file_num, 
+        len_max_seq, n_layers=6, n_head=8, d_k=64, d_v=64, 
+        large_CRF=True, if_highway = False, 
+        in_doc_words = 2, highway_layers = 1, word_level_attention = False):
 
         super(LM_LSTM_CRF, self).__init__()
         self.char_dim = char_dim
@@ -44,6 +52,7 @@ class LM_LSTM_CRF(nn.Module):
         self.word_hidden_dim = word_hidden_dim
         self.word_size = vocab_size
         self.if_highway = if_highway
+        self.word_level_attention = word_level_attention
 
         self.char_embeds = nn.Embedding(char_size, char_dim)
         self.forw_char_lstm = nn.LSTM(char_dim, char_hidden_dim, num_layers=char_rnn_layers, bidirectional=False, dropout=dropout_ratio)
@@ -78,6 +87,17 @@ class LM_LSTM_CRF(nn.Module):
 
         self.batch_size = 1
         self.word_seq_length = 1
+
+        n_position = len_max_seq + 1
+        self.position_enc = nn.Embedding.from_pretrained(
+                    utils.get_sinusoid_encoding_table(n_position, embedding_dim, padding_idx=0),
+                    freeze=True)
+
+        self.layer_stack = nn.ModuleList([
+            submodel.EncoderLayer(embedding_dim*2+char_hidden_dim*2, word_hidden_dim, n_head, d_k, d_v, dropout=dropout_ratio)
+            for _ in range(n_layers)])
+
+        self.fc = nn.Linear(embedding_dim*2+char_hidden_dim*2, word_hidden_dim)
 
     def set_batch_size(self, bsize):
         """
@@ -133,6 +153,7 @@ class LM_LSTM_CRF(nn.Module):
         utils.init_lstm(self.word_lstm)
         utils.init_linear(self.char_pre_train_out)
         utils.init_linear(self.word_pre_train_out)
+        utils.init_linear(self.fc)
         for crf in self.crflist:
             crf.rand_init()
 
@@ -197,7 +218,9 @@ class LM_LSTM_CRF(nn.Module):
         pre_score = self.word_pre_train_out(d_char_out)
         return pre_score, hidden
 
-    def forward(self, forw_sentence, forw_position, back_sentence, back_position, word_seq, file_no, hidden=None):
+    def forward(
+        self, forw_sentence, forw_position, back_sentence, 
+        back_position, word_seq, word_pos, word_dict, file_no, hidden=None):
         '''
         args:
             forw_sentence (char_seq_len, batch_size) : char-level representation of sentence
@@ -205,6 +228,7 @@ class LM_LSTM_CRF(nn.Module):
             back_sentence (char_seq_len, batch_size) : char-level representation of sentence (inverse order)
             back_position (word_seq_len, batch_size) : position of blank space in inversed char-level representation of sentence
             word_seq (word_seq_len, batch_size) : word-level representation of sentence
+            word_pos (word_seq_len, batch_size): position of blank space in word-level representation of sentence
             hidden: initial hidden state
 
         return:
@@ -242,17 +266,41 @@ class LM_LSTM_CRF(nn.Module):
 
         #word
         word_emb = self.word_embeds(word_seq)
-        d_word_emb = self.dropout(word_emb)
+        d_word_emb = self.dropout(word_emb) #(word_seq_length, batch_size, embedding_dim)
+        if self.word_level_attention:
+            word_pos_enc = self.position_enc(word_pos) #(word_seq_length, batch_size, embedding_dim)
 
-        #combine
-        word_input = torch.cat((d_word_emb, d_char_out), dim = 2)
+            #combine
+            enc_output = torch.cat((d_word_emb, d_char_out, word_pos_enc), dim = 2).permute(1, 0, 2)
+            #(batch_size, word_seq_length, embedding_dim*2+char_lstm_output_dim)
 
-        #word level lstm
-        lstm_out, _ = self.word_lstm(word_input)
-        d_lstm_out = self.dropout(lstm_out)
+            #prepare masks
+            slf_attn_mask = utils.get_attn_key_pad_mask(seq_k=word_seq.permute(1,0), seq_q=word_seq.permute(1,0), word_dict=word_dict)
+            non_pad_mask = utils.get_non_pad_mask(seq=word_seq.permute(1,0), word_dict=word_dict)
 
-        #convert to crf
-        crf_out = self.crflist[file_no](d_lstm_out)
+            #pass multi-head-attention layers
+            for enc_layer in self.layer_stack:
+                enc_output, _ = enc_layer(
+                    enc_output,
+                    non_pad_mask=non_pad_mask,
+                    slf_attn_mask=slf_attn_mask
+                ) 
+            #(batch_size, word_seq_length, embedding_dim*2+char_lstm_output_dim)
+
+            fc_out = self.fc(enc_output)
+            #convert to crf
+            crf_out = self.crflist[file_no](fc_out)
+        else:
+            #combine
+            word_input = torch.cat((d_word_emb, d_char_out), dim = 2)
+
+            #word level lstm
+            lstm_out, _ = self.word_lstm(word_input)
+            d_lstm_out = self.dropout(lstm_out)
+
+            #convert to crf
+            crf_out = self.crflist[file_no](d_lstm_out)
+
         crf_out = crf_out.view(self.word_seq_length, self.batch_size, self.tagset_size, self.tagset_size)
         
         return crf_out
