@@ -64,7 +64,7 @@ if __name__ == "__main__":
     parser.add_argument('--least_iters', type=int, default=50, help='at least train how many epochs before stop')
     parser.add_argument('--shrink_embedding', action='store_true', help='shrink the embedding dictionary to corpus (open this if pre-trained embedding dictionary is too large, but disable this may yield better results on external corpus)')
     parser.add_argument('--output_annotation', action='store_true', help='output annotation results or not')
-    parser.add_argument('--attention', type=bool, default=True, help='apply attention')
+    parser.add_argument('--attention', action='store_true', help='apply attention')
     args = parser.parse_args()
 
     if args.gpu >= 0:
@@ -286,7 +286,6 @@ if __name__ == "__main__":
             for f_f, f_p, b_f, b_p, w_f, tg_v, mask_v, len_v, w_p in itertools.chain.from_iterable(cur_dataset):
 
                 f_f, f_p, b_f, b_p, w_f, tg_v, mask_v, w_p = packer.repack_vb(f_f, f_p, b_f, b_p, w_f, tg_v, mask_v, len_v, w_p)
-
                 ner_model.zero_grad()
                 scores = ner_model(f_f, f_p, b_f, b_p, w_f, w_p, f_map, file_no)
                 loss = crit_ner(scores, tg_v, mask_v)
@@ -306,7 +305,6 @@ if __name__ == "__main__":
                 optimizer.step()
         
         epoch_loss /= tot_length
-
         # update lr
         utils.adjust_learning_rate(optimizer, args.lr / (1 + (args.start_epoch + 1) * args.lr_decay))
 

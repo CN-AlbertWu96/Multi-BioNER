@@ -43,7 +43,7 @@ class predict:
             feature (list): words list
             label (list): label list
         """
-        return '\n'.join(map(lambda t: t[0] + ' '+ self.r_l_map[t[1]], zip(feature, label)))
+        return '\n'.join(map(lambda t: t[0] + ' '+ self.r_l_map[t[1].item()], zip(feature, label)))
 
     def decode_s(self, feature, label):
         """
@@ -257,6 +257,8 @@ class predict_wc(predict):
 
         masks = torch.ByteTensor(list(map(lambda t: [1] * (len(t) + 1) + [0] * (word_len - len(t) - 1), word_features)))
         word_t = torch.LongTensor(list(map(lambda t: t + [self.pad_word] * (word_len - len(t)), word_features)))
+        # word_p = torch.LongTensor([x for x in range(len(padded_feature_len))])
+        word_p = torch.LongTensor( list( map(lambda t: list(x for x in range(len(t + [1] * (word_len - len(t))))), fea_len) ))
 
         if self.if_cuda:
             f_f = autograd.Variable(forw_t.transpose(0, 1)).cuda()
@@ -264,6 +266,7 @@ class predict_wc(predict):
             b_f = autograd.Variable(back_t.transpose(0, 1)).cuda()
             b_p = autograd.Variable(back_p.transpose(0, 1)).cuda()
             w_f = autograd.Variable(word_t.transpose(0, 1)).cuda()
+            w_p = autograd.Variable(word_p.transpose(0, 1)).cuda()
             mask_v = masks.transpose(0, 1).cuda()
         else:
             f_f = autograd.Variable(forw_t.transpose(0, 1))
@@ -272,8 +275,9 @@ class predict_wc(predict):
             b_p = autograd.Variable(back_p.transpose(0, 1))
             w_f = autograd.Variable(word_t.transpose(0, 1))
             mask_v = masks.transpose(0, 1)
+            w_p = autograd.Variable(word_p.transpose(0, 1))
 
-        scores = ner_model(f_f, f_p, b_f, b_p, w_f, file_no)
+        scores = ner_model(f_f, f_p, b_f, b_p, w_f, w_p, self.f_map, file_no)
         decoded = self.decoder.decode(scores.data, mask_v)
 
         return decoded
