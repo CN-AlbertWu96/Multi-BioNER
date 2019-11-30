@@ -16,10 +16,9 @@ class EncoderLayer(nn.Module):
         enc_output, enc_slf_attn = self.slf_attn(
             enc_input, enc_input, enc_input, mask=slf_attn_mask)
         enc_output *= non_pad_mask
-
         enc_output = self.pos_ffn(enc_output)
         enc_output *= non_pad_mask
-
+        
         return enc_output, enc_slf_attn
 
 class MultiHeadAttention(nn.Module):
@@ -66,7 +65,9 @@ class MultiHeadAttention(nn.Module):
         k = k.permute(2, 0, 1, 3).contiguous().view(-1, len_k, d_k) # (n*b) x lk x dk
         v = v.permute(2, 0, 1, 3).contiguous().view(-1, len_v, d_v) # (n*b) x lv x dv
 
+        # print(q.shape, k.shape, v.shape)
         mask = mask.repeat(n_head, 1, 1) # (n*b) x .. x ..
+        # print(mask.shape)
         output, attn = self.attention(q, k, v, mask=mask)
 
         output = output.view(n_head, sz_b, len_q, d_v)
@@ -108,9 +109,9 @@ class ScaledDotProductAttention(nn.Module):
 
     def forward(self, q, k, v, mask=None):
 
-        attn = torch.bmm(q, k.transpose(1, 2))
+        attn = torch.bmm(q, k.transpose(1, 2)) #batch * seq_len * seq_len
+        # print(q.shape, k.shape, attn.shape)
         attn = attn / self.temperature
-
         if mask is not None:
             attn = attn.masked_fill(mask, -np.inf)
         attn = self.softmax(attn)

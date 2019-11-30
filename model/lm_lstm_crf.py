@@ -14,6 +14,7 @@ import model.crf as crf
 import model.utils as utils
 import model.highway as highway
 import model.submodel as submodel
+import sys
 
 class LM_LSTM_CRF(nn.Module):
     """LM_LSTM_CRF model
@@ -40,7 +41,7 @@ class LM_LSTM_CRF(nn.Module):
         tagset_size, char_size, char_dim, char_hidden_dim, 
         char_rnn_layers, embedding_dim, word_hidden_dim, 
         word_rnn_layers, vocab_size, dropout_ratio, file_num, 
-        len_max_seq, n_layers=6, n_head=8, d_k=64, d_v=64, 
+        len_max_seq, n_layers=1, n_head=8, d_k=64, d_v=64, 
         large_CRF=True, if_highway = False, 
         in_doc_words = 2, highway_layers = 1, word_level_attention = False):
 
@@ -265,18 +266,24 @@ class LM_LSTM_CRF(nn.Module):
             d_char_out = fb_lstm_out
 
         #word
+        # print("word_seq: ", word_seq)
         word_emb = self.word_embeds(word_seq)
         d_word_emb = self.dropout(word_emb) #(word_seq_length, batch_size, embedding_dim)
+        # print("word_emb: ", d_word_emb.shape)
+        # print("word_level_attention: ", self.word_level_attention)
         if self.word_level_attention:
             word_pos_enc = self.position_enc(word_pos) #(word_seq_length, batch_size, embedding_dim)
-
+            # print("word_pos_enc: ", word_pos_enc.shape)
             #combine
             enc_output = torch.cat((d_word_emb, d_char_out, word_pos_enc), dim = 2).permute(1, 0, 2)
+            # print("enc_output: ", enc_output.shape)
             #(batch_size, word_seq_length, embedding_dim*2+char_lstm_output_dim)
 
             #prepare masks
             slf_attn_mask = utils.get_attn_key_pad_mask(seq_k=word_seq.permute(1,0), seq_q=word_seq.permute(1,0), word_dict=word_dict)
+            # print("slf_attn_mask: ", slf_attn_mask.shape)
             non_pad_mask = utils.get_non_pad_mask(seq=word_seq.permute(1,0), word_dict=word_dict)
+            # print("non_pad_mask: ", non_pad_mask.shape)
 
             #pass multi-head-attention layers
             for enc_layer in self.layer_stack:
@@ -284,12 +291,16 @@ class LM_LSTM_CRF(nn.Module):
                     enc_output,
                     non_pad_mask=non_pad_mask,
                     slf_attn_mask=slf_attn_mask
-                ) 
+                )
+            
+            # print("enc_output: ", enc_output.shape)
             #(batch_size, word_seq_length, embedding_dim*2+char_lstm_output_dim)
 
             fc_out = self.fc(enc_output)
+            # print("fc_out: ", fc_out.shape)
             #convert to crf
             crf_out = self.crflist[file_no](fc_out)
+            # print("crf_out: ", crf_out.shape)
         else:
             #combine
             word_input = torch.cat((d_word_emb, d_char_out), dim = 2)
@@ -301,6 +312,7 @@ class LM_LSTM_CRF(nn.Module):
             #convert to crf
             crf_out = self.crflist[file_no](d_lstm_out)
 
-        crf_out = crf_out.view(self.word_seq_length, self.batch_size, self.tagset_size, self.tagset_size)
-        
+        crf_out = crf_out.view(self.batch_size, self.word_seq_length, self.tagset_size, self.tagset_size)
+        crf_out = crf_out.permute(1,0,2,3)
+        # print(crf_out)
         return crf_out
