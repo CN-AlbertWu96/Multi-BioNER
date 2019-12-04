@@ -1,0 +1,82 @@
+\documentclass{article}
+
+\usepackage[final]{nips_2017}
+\usepackage[utf8]{inputenc} % allow utf-8 input
+\usepackage[T1]{fontenc}    % use 8-bit T1 fonts
+\usepackage{hyperref}       % hyperlinks
+\usepackage{url}            % simple URL typesetting
+\usepackage{booktabs}       % professional-quality tables
+\usepackage{amsfonts}       % blackboard math symbols
+\usepackage{nicefrac}       % compact symbols for 1/2, etc.
+\usepackage{microtype}      % microtypography
+\usepackage{bm}             % bold in math
+\usepackage{graphicx}       % images
+\usepackage{algorithm}      % algorithm
+\usepackage[noend]{algpseudocode} % algorithm
+\usepackage{caption}        % captionof
+\usepackage{array}          % thick column hline
+\usepackage{booktabs}       % table style
+\usepackage{pbox}           % table line break
+\usepackage{subcaption}     % multiple figuresx
+\usepackage{tikz}
+\usetikzlibrary{positioning, fit, arrows.meta, shapes}
+\usepackage{amsmath}
+
+
+\title{Biomedical Named Entity Recognition with Attention}
+\hypersetup{
+    colorlinks = true,
+}
+\makeatletter
+\def\BState{\State\hskip-\ALG@thistlm}
+\makeatother
+\floatname{algorithm}{Procedure}
+\renewcommand{\algorithmicrequire}{\textbf{Input:}}
+\renewcommand{\algorithmicensure}{\textbf{Output:}}
+
+\newcolumntype{?}{!{\vrule width 3pt}}
+
+\author{
+  Hao Wu\\
+  University of Illinois at Urbana-Champaign\\
+  Urbana, IL \\
+  \texttt{haow11@illinois.edu} \\
+  \And
+  Peilun Zhang \\
+  University of Illinois at Urbana-Champaign\\
+  Urbana, IL \\
+  \texttt{peilunz2@illinois.edu} \\
+}
+
+
+\DeclareMathOperator*{\argmax}{argmax}
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Biomedical named entity recognition (BioNER) is a specific sequence to sequence (seq2seq) task. Given a sequence of words, the goal is to obtain the best or most possible sequential labels, such as genes, chemicals and diseases. Currently, most sequence labeling methods heavily rely on Bi-directional Long Short-Term Memory-Conditional Random Field (BiLSTM-CRF) models. Transformer that utilizes attention mechanism shows promising results in handling seq2seq problems, which provides us with insights to modify the BiLSTM-CRF models to utilize attention mechanism to conduct BioNER. We propose an Attention-CRF model to selectively encode the representation of sequential words, and recognize the sequence of labels. We evaluate the performance of our learning framework on 15 BioNER datasets compared with state-of-the-art BioNER frameworks and baselines. We further compare and analyze the time complexity of BiLSTM-CRF and Attention-CRF as seq2seq models.
+\end{abstract}
+%%%%%%%%%%% 
+% Introduction
+%%%%%%%%%%% 
+\section{Introduction}
+\input{intro}
+%%%%%%%%%%% 
+% Background
+%%%%%%%%%%% 
+\section{Background}
+\input{background}
+%%%%%%%%%%% 
+% Background
+%%%%%%%%%%% 
+\section{BioNER Model with Attention}
+%%%%%%%%%%% 
+% Experiment
+%%%%%%%%%%% 
+\section{Experiment}
+\input{experiment}
+
+\bibliographystyle{plainnat}
+\bibliography{bib}
+\end{document}

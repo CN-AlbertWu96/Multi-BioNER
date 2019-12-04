@@ -1,0 +1,62 @@
+
+\subsection{Dataset}
+The datasets we use in this paper to evaluate the performance of BioNER models were introduced by \citet{crichton2017neural}. They provided 15 datasets focusing on biomedical name entity types. These datasets contain several entity types about biomedical and they are all publicly accessible. The details of datasets above are listed in Table~\ref{table:dataset}, including the name of datasets, name entity types, and entity counts.
+
+Following the data splitting metrics of \citet{lample2016neural}, we separate the datasets into three sections: training section, development section , and test section. We use training section to optimize our neural networks, whose hyperparamters are tuned on development section. And the performance of the model will be evaluated in the test section. The training set will include most data items, around $70\%$ of all data items, and the development and test set will contain around $10\%$ and $20\%$ datasets respectively. The size of development section should not be too large, because it is used to tune the hyperparameters by many times of repeated experiments.
+
+The sequence of labels is encoded by IOBES schemes. According this schemes, each word can be annotated with 5 kinds of label. The IOBES format is following IOB format (inside-outside-beginning). It is a tagging format for tagging tokens from sequences.
+
+\begin{itemize}\label{exp:iobes}
+    \item I: I- prefix indicates the tag is in the chunk
+    \item O: O- prefix indicates the tag is outside a chunk
+    \item B: B- prefix means the tag is the beginning the chunk and is followed by tags with same entity types
+    \item E: E- prefix means the tag is the end of the chunk
+    \item S: S- prefix indicates single tag of the chunk
+\end{itemize}
+
+\subsubsection{Dataset Benchmarks}
+
+\begin{table}[]
+\caption{The datasets and details of their annotations}
+\label{table:dataset}
+\resizebox{\columnwidth}{!}{
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Dataset} & \textbf{Entity Types} & \textbf{Entity Counts} \\ \hline
+\textbf{AnatEM} & Anatomy NE & 13,701 \\ \hline
+\textbf{BC2GM} & Gene/Protein NE & 24,583 \\ \hline
+\textbf{BC4CHEMD} & Chemical NE & 84,310 \\ \hline
+\textbf{BC5CDR} & Chemical, Disease NEs & \begin{tabular}[c]{@{}l@{}}Chemical: 15,935; \\ Disease: 12,852\end{tabular} \\ \hline
+\textbf{BioNLP09} & Gene/Protein NE & 14963 \\ \hline
+\textbf{BioNLP11EPI} & Gene/Protein NE & 15,811 \\ \hline
+\textbf{BioNLP11ID} & 4 NEs & \begin{tabular}[c]{@{}l@{}}Gene/Protein: 6551; Organism: 3471;\\ Chemical: 973; Regulon-operon: 87\end{tabular} \\ \hline
+\textbf{BioNLP13CG} & 16NEs & \begin{tabular}[c]{@{}l@{}}Gene/Protein: 7908; Cell: 3492;\\ Cancer: 2582; Chemical: 2270; \\ Multi-tissue structure: 857; Tissue: 587;  \\ Cellular component: 569; Organ: 421; \\ Organism substance: 283; \\ Pathological formation: 228; \\ Amino acid: 135; Organism: 1715;\\ Immaterial anatomical entity: 102; \\ Organism subdivision: 98; \\ Anatomical system: 41;\\ Developing anatomical structure: 35\end{tabular} \\ \hline
+\textbf{BioNLP13GE} & Gene/Protein NE & 12,057 \\ \hline
+\textbf{BioNLP13PC} & 4 NEs & \begin{tabular}[c]{@{}l@{}}Gene/Protein: 10,891; \\ Chemical: 2487; Complex: 1502; \\ Cellular component: 1013\end{tabular} \\ \hline
+\textbf{CRAFT} & 6 NEs & \begin{tabular}[c]{@{}l@{}}SO: 18,974; Gene/Protein: 16,064;\\ Taxonomy: 6868; Chemical: 6053; \\ CL: 5495; GO-CC: 4180\end{tabular} \\ \hline
+\textbf{Ex-PTM} & Gene/Protein NE & 4698 \\ \hline
+\textbf{JNLPBA} & 5 NEs & \begin{tabular}[c]{@{}l@{}}Gene/Protein: 35,336; \\ DNA: 10,589; Cell Type: 8639;\\ Cell Line: 4330; RNA: 1069\end{tabular} \\ \hline
+\textbf{Linnaeus} & Species NE & 4263 \\ \hline
+\textbf{NCBI-Disease} & Disease NE & 6881 \\ \hline
+\end{tabular}
+}
+\end{table}
+
+\subsection{Pre-trained Word Embedding}
+\citet{moen2013distributional} created a bunch of word vectors trained from the entire available biomedical scientific literature, a text corpus of over five billion words. It includes three separate data sources: (1) Abstracts form PubMed dataset (PubMed); (2)  Full-text documents from PubMed Central (PMC); (3) English Wikipedia dump (Wiki). 
+
+\citet{habibi2017deep} studied the impact of different word embeddings trained from different combination of data sources listed above. They reported that the Wiki-PubMed-PMC embeddings achieve the best performance in all their evaluations. This dataset provides a set of word vectors with 200 dimensions induced on a combination of PubMed and PMC texts with texts extracted from a recent English Wikipedia dump \citep{moen2013distributional}. 
+
+\subsection{Evaluation Metrics}
+All evaluation results are conducted on each test dataset. \citet{wang2018cross} mentioned \textit{exact match} is one solution to evaluate the prediction, which means only that the predicted entity type and entity boundary are the same as the ground truth will be considered as "matched". After that, we calculate the precision, recall, micro-F1 and macro-F1 scores for each dataset independently to check the performance of each model on different dataset. Moreover, we also provide these metrics for each name entity to show the performance of each model on handling different entity types. We want to figure out whether each model is sensitive to the specific entity types. For example, if the entity count is small, the model will fail to capture the information about that entity type and give a bad result.
+
+We compare the set of false positives (FPs) and false negatives (FNs) of the different BioNER methods (\citet{habibi2017deep}, \citet{wang2018cross}) for error analysis. Thus, in the result section, we will show the error samples of each model and the sequence of labels together.
+
+\subsection{Baseline Methods}
+In the experiment, we will compare our Attention-CRF model with 4 previous neural network models:
+\begin{enumerate}
+    \item Vanilla BiLSTM-CRF (VBC): A three layer BiLSTM-CRF architecture was employed by \citet{lample2016neural} and \citet{habibi2017deep}. They took the characters of each word in to the first BiLSTM layer to produce a character-level representation for this word. Then the character-level vector was concatenated with word embedding and fed into the second BiLSTM layer to produce label distribution. Finally, a CRF layer was added to maximize the log probability of label sequence.
+    \item Single Task Model (STM): Compared with vanilla BiLSTM-CRF, \citet{wang2018cross} proposed STM to handle out-of-vocabulary (OOV) words. They still adopted three layer BiLSTM-CRF architecture but considered the character sequence of the input sentence rather than word as the input of the first BiLSTM layer.
+    \item LM-LSTM-CRF (LLC):
+    \item Tie or Break (ToB): \citet{shang2018learning} regarded the NER task as entity span detection and entity type prediction problem. It had no CRF layer and was reported being more efficient than BiLSTM-CRF models.
+\end{enumerate}
