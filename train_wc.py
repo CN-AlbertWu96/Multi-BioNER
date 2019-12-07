@@ -21,6 +21,10 @@ import itertools
 import functools
 import random
 
+# import wandb
+
+# wandb.init(project="attention-crf")
+
 def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
@@ -216,6 +220,8 @@ if __name__ == "__main__":
         in_doc_words=in_doc_words, 
         highway_layers = args.highway_layers,
         word_level_attention = args.attention)
+    
+    # wandb.watch(ner_model)
 
     if args.load_check_point:
         ner_model.load_state_dict(checkpoint_file['state_dict'])
@@ -248,6 +254,8 @@ if __name__ == "__main__":
         packer = CRFRepack_WC(len(l_map), False)
 
     tot_length = sum(map(lambda t: len(t), dataset_loader))
+
+    print('total parameters: ' + str(utils.count_parameters(ner_model)))
 
     best_f1 = []
     for i in range(file_num):
@@ -308,6 +316,8 @@ if __name__ == "__main__":
         # update lr
         utils.adjust_learning_rate(optimizer, args.lr / (1 + (args.start_epoch + 1) * args.lr_decay))
 
+        # torch.save(ner_model.state_dict(), os.path.join(wandb.run.dir, 'model.pt'))
+
         # eval & save check_point
         if 'f' in args.eva_matrix:
             dev_f1, dev_pre, dev_rec, dev_acc = evaluator.calc_score(ner_model, dev_dataset_loader[file_no], f_map, file_no)
@@ -322,7 +332,7 @@ if __name__ == "__main__":
 
                 track_list.append(
                     {'loss': epoch_loss, 'dev_f1': dev_f1, 'dev_acc': dev_acc, 'test_f1': test_f1,
-                     'test_acc': test_acc})
+                     'test_acc': test_acc, 'time': time.time()-start_time})
 
                 print(
                     '(loss: %.4f, epoch: %d, dataset: %d, dev F1 = %.4f, dev pre = %.4f, dev rec = %.4f, F1 on test = %.4f, pre on test= %.4f, rec on test= %.4f), saving...' %
@@ -336,9 +346,12 @@ if __name__ == "__main__":
                      test_pre,
                      test_rec))
 
+                # wandb.log({"Test F1": test_f1, "Test Loss": epoch_loss})
+
                 if args.output_annotation: #NEW
                     print('annotating')
-                    with open('output'+str(file_no)+'.txt', 'w') as fout:
+                    attn_str = '.attention' if args.attention else '.bilstm'
+                    with open('annotate/output'+str(file_no)+'.txt.'+args.train_file[0].split('/')[2]+attn_str, 'w') as fout:
                         predictor.output_batch(ner_model, test_word[file_no], fout, file_no)
 
                 try:
@@ -352,7 +365,7 @@ if __name__ == "__main__":
                         'in_doc_words': in_doc_words
                     }, {'track_list': track_list,
                         'args': vars(args)
-                        }, args.checkpoint + 'cwlm_lstm_crf')
+                        }, args.checkpoint + '/cwlm_lstm_crf_' + args.train_file[0].split('/')[2])
                 except Exception as inst:
                     print(inst)
 
@@ -365,7 +378,7 @@ if __name__ == "__main__":
                        dev_f1,
                        dev_pre,
                        dev_rec))
-                track_list.append({'loss': epoch_loss, 'dev_f1': dev_f1, 'dev_acc': dev_acc})
+                track_list.append({'loss': epoch_loss, 'dev_f1': dev_f1, 'dev_acc': dev_acc, 'time': time.time()-start_time})
 
         print('epoch: ' + str(args.start_epoch) + '\t in ' + str(args.epoch) + ' take: ' + str(
             time.time() - start_time) + ' s')

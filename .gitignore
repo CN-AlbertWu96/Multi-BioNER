@@ -112,9 +112,16 @@ annotate/
 # data
 data_bioner_5/
 test.tsv
+image/
 
 # checkpoint
 checkpoint/
 
 # scripts
 download.py
+
+# wandb
+wandb*
+
+# scripts
+*.sh

@@ -861,3 +861,6 @@ def get_attn_key_pad_mask(seq_k, seq_q, word_dict):
 def get_non_pad_mask(seq, word_dict):
     assert seq.dim() == 2
     return seq.ne(word_dict['<eof>']).type(torch.float).unsqueeze(-1)
+
+def count_parameters(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
