@@ -350,7 +350,7 @@ if __name__ == "__main__":
 
                 if args.output_annotation: #NEW
                     print('annotating')
-                    attn_str = '.attention' if args.attention else '.bilstm'
+                    attn_str = '.attention.over' if args.attention else '.bilstm'
                     with open('annotate/output'+str(file_no)+'.txt.'+args.train_file[0].split('/')[2]+attn_str, 'w') as fout:
                         predictor.output_batch(ner_model, test_word[file_no], fout, file_no)
 
@@ -365,7 +365,7 @@ if __name__ == "__main__":
                         'in_doc_words': in_doc_words
                     }, {'track_list': track_list,
                         'args': vars(args)
-                        }, args.checkpoint + '/cwlm_lstm_crf_' + args.train_file[0].split('/')[2])
+                        }, args.checkpoint + '/cwlm_lstm_crf_' + args.train_file[0].split('/')[2] + '.over')
                 except Exception as inst:
                     print(inst)
 
