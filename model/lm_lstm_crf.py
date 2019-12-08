@@ -95,10 +95,10 @@ class LM_LSTM_CRF(nn.Module):
                     freeze=True)
 
         self.layer_stack = nn.ModuleList([
-            submodel.EncoderLayer(embedding_dim*2+char_hidden_dim*2, word_hidden_dim, n_head, d_k, d_v, dropout=dropout_ratio)
+            submodel.EncoderLayer(word_hidden_dim + embedding_dim, word_hidden_dim, n_head, d_k, d_v, dropout=dropout_ratio)
             for _ in range(n_layers)])
 
-        self.fc = nn.Linear(embedding_dim*2+char_hidden_dim*2, word_hidden_dim)
+        self.fc = nn.Linear(word_hidden_dim + embedding_dim, word_hidden_dim)
 
     def set_batch_size(self, bsize):
         """
@@ -272,12 +272,20 @@ class LM_LSTM_CRF(nn.Module):
         # print("word_emb: ", d_word_emb.shape)
         # print("word_level_attention: ", self.word_level_attention)
         if self.word_level_attention:
+            #combine
+            word_input = torch.cat((d_word_emb, d_char_out), dim = 2)
+
+            #word level lstm
+            lstm_out, _ = self.word_lstm(word_input) #(word_seq_length, batch_size, word_hidden_dim)
+            # print("lstm_out: ", lstm_out.shape)
+            d_lstm_out = self.dropout(lstm_out)
+
             word_pos_enc = self.position_enc(word_pos) #(word_seq_length, batch_size, embedding_dim)
             # print("word_pos_enc: ", word_pos_enc.shape)
             #combine
-            enc_output = torch.cat((d_word_emb, d_char_out, word_pos_enc), dim = 2).permute(1, 0, 2)
+            enc_output = torch.cat((lstm_out, word_pos_enc), dim = 2).permute(1, 0, 2)
             # print("enc_output: ", enc_output.shape)
-            #(batch_size, word_seq_length, embedding_dim*2+char_lstm_output_dim)
+            #(batch_size, word_seq_length, embedding_dim + word_hidden_dim)
 
             #prepare masks
             slf_attn_mask = utils.get_attn_key_pad_mask(seq_k=word_seq.permute(1,0), seq_q=word_seq.permute(1,0), word_dict=word_dict)
